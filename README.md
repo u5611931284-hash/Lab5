@@ -1,57 +1,245 @@
-# Laboratorium 5: Deployment, Quota i LimitRange w Kubernetes
+Sprawozdanie: Laboratorium 5 (PFSwChO)
+Repozytorium zawiera kompletne rozwiązanie zadania głównego z Laboratorium 5 . Celem było skonfigurowanie dwóch przestrzeni nazw (ns-dev, ns-prod) z różnymi politykami zasobów, a następnie przetestowanie działania ResourceQuota i LimitRange za pomocą trzech wdrożeń (Deployment): no-test, yes-test oraz zero-test.
 
-Repozytorium zawiera pliki konfiguracyjne YAML oraz dokumentację zadań wykonanych w ramach Laboratorium nr 5 (PFSwChO).
+1. Konfiguracja Środowiska
+Pierwszym krokiem jest utworzenie wymaganych przestrzeni nazw oraz zastosowanie polityk ResourceQuota (limitów dla całego namespace) i LimitRange (domyślnych limitów dla Podów) zgodnie z wymaganiami zadania .
 
-Celem ćwiczeń było zapoznanie się z zaawansowanymi metodami zarządzania zasobami (`ResourceQuota`, `LimitRange`) oraz sposobem działania obiektów `Deployment`.
+Polecenia Uruchomieniowe
+Poniższe polecenia tworzą namespaces oraz wdrażają polityki zasobów.
 
-## 🏁 Część 1: Ćwiczenia z Instrukcji
+Bash
 
-### [cite_start]Zarządzanie zasobami (`appresources.yaml`) [cite: 28-33]
-* **Krok 1:** Poprawne uruchomienie Poda `myapp` (MySQL + WordPress) z domyślnymi zasobami.
-* [cite_start]**Krok 2 (Błąd):** Modyfikacja pliku `appresources.yaml` i zmiana `requests: memory` na `64Gi`[cite: 31].
-* **Diagnoza:** Pod "utknął" w stanie `Pending`. Polecenie `kubectl describe pod myapp` wykazało błąd `FailedScheduling` z powodu `Insufficient memory`. Klaster nie mógł zagwarantować 64GB RAM.
+# Krok 1: Utworzenie przestrzeni nazw
+kubectl apply -f manifests/01-namespace-ns-dev.yaml
+kubectl apply -f manifests/02-namespace-ns-prod.yaml
 
-### [cite_start]Quota i Deployment (`limiter`) [cite: 53-59, 81, 101]
-* [cite_start]**Krok 1:** Utworzono `namespace restricted` oraz `ResourceQuota` o nazwie `xlimits` (limit `cpu=1`, `memory=500M`, `pods=3`) [cite: 53-59].
-* [cite_start]**Krok 2 (Błąd):** Próba uruchomienia `Deployment` o nazwie `limiter` (`kubectl create deploy limiter...`) [cite: 74-76] nie powiodła się (`READY: 0/3`). [cite_start]Diagnoza: `Quota` zablokowała tworzenie Podów, ponieważ Deployment *nie definiował* `requests` ani `limits` dla zasobów[cite: 39].
-* [cite_start]**Krok 3 (Naprawa):** Limity i żądania zostały dodane "w locie" za pomocą polecenia `kubectl set resources deployment limiter --requests=... --limits=...` [cite: 92-93, 101-104].
-* **Krok 4 (Sukces):** Deployment poprawnie uruchomił 3 Pody. Polecenie `kubectl describe quota xlimits` pokazało zużycie zasobów (np. `cpu: 300m/1`).
+# Krok 2: Zastosowanie polityk dla ns-dev (Quota + LimitRange)
+kubectl apply -f manifests/11-rq-ns-dev.yaml
+kubectl apply -f manifests/12-lr-ns-dev.yaml
 
-### Monitorowanie i Edycja (`kubectl top`, `kubectl edit`)
-* **Problem:** Polecenie `kubectl top` zwróciło błąd `Metrics API not available`.
-* [cite_start]**Rozwiązanie:** Włączenie dodatku `minikube addons enable metrics-server` rozwiązało problem i pozwoliło monitorować bieżące zużycie CPU/RAM przez Pody [cite: 156-161].
-* [cite_start]**Edycja:** Za pomocą `kubectl edit quota xlimits` [cite: 177-179] limit CPU został obniżony do `100m`. [cite_start]Spowodowało to, że zużycie przekroczyło limit (`300m/100m`), jednak Pody **nadal działały**, co dowodzi, że Quota jest sprawdzana *tylko w momencie tworzenia* Poda [cite: 239-240].
+# Krok 3: Zastosowanie polityki dla ns-prod (Quota)
+kubectl apply -f manifests/13-rq-ns-prod.yaml
+Weryfikacja Konfiguracji
+Sprawdzenie, czy wszystkie zasady zostały poprawnie zastosowane w klastrze.
 
-### [cite_start]LimitRange (`limitrangetest.yaml`) [cite: 244-246, 258]
-* [cite_start]**Krok 1:** Utworzono `namespace galaxy` [cite: 253] [cite_start]oraz `LimitRange` [cite: 258-262][cite_start], który ustawiał domyślne zasoby (Request: 256Mi, Limit: 512Mi) dla kontenerów[cite: 260].
-* [cite_start]**Krok 2 (Test):** Uruchomiono Poda `nginx` (`kubectl run lmemory...`) *bez* definiowania zasobów [cite: 269-270].
-* **Diagnoza:** `kubectl describe pod lmemory` pokazało, że Pod **automatycznie otrzymał** `Requests: memory: 256Mi` oraz `Limits: memory: 512Mi`, zgodnie z definicją w `LimitRange`.
+Bash
 
-### [cite_start]Obiekt Deployment (Właściwości) [cite: 273, 280, 287-292]
-* [cite_start]**Samo-naprawianie:** Po ręcznym usunięciu Poda z Deploymentu (`kubectl delete pod...`), `ReplicaSet` natychmiast wykrył brak i uruchomił nowy Pod, aby utrzymać żądaną liczbę replik [cite: 280-281].
-* [cite_start]**Skalowanie:** Pokazano dwie metody skalowania Deploymentu `dredis`: za pomocą `kubectl scale deploy dredis --replicas=4` [cite: 288] [cite_start]oraz `kubectl edit deploy dredis` [cite: 291-292].
+# Sprawdzenie, czy obie przestrzenie nazw istnieją
+kubectl get ns
 
----
+# Sprawdzenie Quota w ns-dev (oczekiwany limit 10 podów) 
+kubectl get resourcequota -n ns-dev
 
-## 🏆 Część 2: Zadanie Główne (ns-dev, ns-prod)
+# Sprawdzenie LimitRange w ns-dev (oczekiwane limity 200m/256Mi) 
+kubectl get limitrange -n ns-dev
 
-[cite_start]Zgodnie z zadaniem [cite: 296-306], skonfigurowano dwa środowiska.
+# Sprawdzenie Quota w ns-prod
+kubectl get resourcequota -n ns-prod
+2. Testowanie Deploymentów w ns-dev
+Testy polegają na próbie uruchomienia trzech różnych wdrożeń w ns-dev, aby zweryfikować działanie polityki LimitRange .
 
-* **`ns-prod`:** Otrzymał `ResourceQuota` z wysokimi limitami zasobów (plik `prod-quota.yaml`).
-* [cite_start]**`ns-dev`:** Otrzymał `ResourceQuota` (limit `pods=10`) oraz `LimitRange` (max `cpu=200m`, `memory=256Mi`) (plik `dev-setup.yaml`) [cite: 298-299].
+Test 1: Deployment no-test (Oczekiwany błąd) 
 
-### Testowanie `ns-dev`:
+Ten Deployment (plik 21-deploy-no-test.yaml) jawnie żąda zasobów (cpu: 300m), które przekraczają limit ustalony w LimitRange (200m). Oczekujemy, że Pod nie zostanie utworzony.
 
-1.  **`zero-test` (Test 4):**
-    * [cite_start]**Akcja:** `kubectl create deploy zero-test --image=nginx -n ns-dev`[cite: 306].
-    * **Wynik:** **Sukces**. Pod uruchomił się poprawnie.
-    * **Dowód:** `kubectl describe pod...` wykazał, że Pod automatycznie otrzymał domyślne limity (200m CPU / 256Mi RAM) z `LimitRange`.
+Bash
 
-2.  **`no-test` (Test 2):**
-    * [cite_start]**Akcja:** Próba ustawienia limitów `cpu=300m` (`kubectl set resources...`), co przekracza limit `LimitRange` (200m)[cite: 304].
-    * **Wynik:** **Błąd**. Deployment nie był w stanie utworzyć Poda (`READY: 0/1`).
-    * **Dowód:** `kubectl describe replicaset...` pokazał błąd `FailedCreate` z komunikatem, że żądane zasoby (`300m`) przekraczają maksymalny limit `LimitRange` (`200m`).
+# Uruchomienie "złego" wdrożenia
+kubectl apply -f manifests/21-deploy-no-test.yaml
 
-3.  **`yes-test` (Test 3):**
-    * [cite_start]**Akcja:** Ustawienie limitów `cpu=150m`, czyli *poniżej* limitu `LimitRange`[cite: 305].
-    * **Wynik:** **Sukces**. Pod uruchomił się poprawnie, ponieważ mieścił się w dozwolonych limitach.
+# Sprawdzenie statusu wdrożenia (oczekiwane READY: 0/1)
+kubectl get deploy -n ns-dev
+
+# Sprawdzenie, czy Pody nie zostały utworzone
+kubectl get pods -n ns-dev
+
+# Diagnoza: Sprawdzenie zdarzeń (Events) w ReplicaSet lub Deployment
+# pokaże błąd "FailedCreate" z powodu przekroczenia limitów (300m > 200m).
+kubectl describe deployment no-test -n ns-dev
+Test 2: Deployment yes-test (Oczekiwany sukces) 
+
+Ten Deployment (plik 22-deploy-yes-test.yaml) jawnie żąda zasobów (cpu: 150m), które mieszczą się w limicie LimitRange (200m). Oczekujemy, że Pod uruchomi się poprawnie.
+
+Bash
+
+# Uruchomienie "dobrego" wdrożenia
+kubectl apply -f manifests/22-deploy-yes-test.yaml
+
+# Sprawdzenie statusu (oczekiwane READY: 1/1 i status Running)
+kubectl get deploy,po -n ns-dev
+
+# Sprawdzenie zasobów Poda (powinny odpowiadać żądaniu 150m)
+kubectl describe pod -l app=yes-test -n ns-dev
+Test 3: Deployment zero-test (Domyślne wartości) 
+
+Ten Deployment (plik 23-deploy-zero-test.yaml) nie definiuje żadnych zasobów. Oczekujemy, że LimitRange automatycznie przypisze mu domyślne wartości (requests i limits).
+
+Bash
+
+# Uruchomienie wdrożenia "zero"
+kubectl apply -f manifests/23-deploy-zero-test.yaml
+
+# Sprawdzenie statusu (oczekiwane READY: 1/1 i status Running)
+kubectl get deploy,po -n ns-dev
+
+# Sprawdzenie zasobów Poda (powinny pojawić się domyślne limity)
+kubectl describe pod -l app=zero-test -n ns-dev
+
+# Precyzyjne wyciągnięcie przypisanych zasobów (twardy dowód)
+kubectl get pod -l app=zero-test -n ns-dev -o=jsonpath="{.items[0].spec.containers[0].resources}"
+Oczekiwany wynik: Polecenie powinno zwrócić zasoby przypisane przez LimitRange (np. limits: cpu: 200m, memory: 256Mi).
+
+3. Zawartość Plików Manifestów (manifests/)
+Poniżej znajduje się zawartość plików YAML użytych do wykonania zadania, umieszczonych w katalogu manifests/.
+
+manifests/01-namespace-ns-dev.yaml
+YAML
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-dev
+manifests/02-namespace-ns-prod.yaml
+YAML
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ns-prod
+manifests/11-rq-ns-dev.yaml
+(Ogranicza ns-dev do 10 podów )
+
+YAML
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-pod-quota
+  namespace: ns-dev
+spec:
+  hard:
+    pods: "10"
+manifests/12-lr-ns-dev.yaml
+(Ustawia domyślne i maksymalne limity dla ns-dev )
+
+YAML
+
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-default-limits
+  namespace: ns-dev
+spec:
+  limits:
+  - default: # Maksymalny limit, jaki Pod może otrzymać
+      cpu: "200m"     
+      memory: "256Mi"
+    defaultRequest: # Domyślne żądanie (jeśli nie podano)
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container
+manifests/13-rq-ns-prod.yaml
+(Ustawia 2x większe zasoby dla ns-prod niż dla ns-dev )
+
+YAML
+
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: prod-main-quota
+  namespace: ns-prod
+spec:
+  hard:
+    pods: "20" # 2x 10 podów
+    # Ustawiamy zasoby 2x większe niż limity z ns-dev
+    requests.cpu: "2"
+    requests.memory: "2Gi"
+    limits.cpu: "4"
+    limits.memory: "4Gi"
+manifests/21-deploy-no-test.yaml
+(Próba przekroczenia limitów LimitRange )
+
+YAML
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-test
+  namespace: ns-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: no-test
+  template:
+    metadata:
+      labels:
+        app: no-test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        resources:
+          # Żądanie 300m przekracza limit 200m z LimitRange
+          requests:
+            cpu: "300m" 
+            memory: "128Mi"
+          limits:
+            cpu: "300m"
+            memory: "256Mi"
+manifests/22-deploy-yes-test.yaml
+(Żądania mieszczące się w limitach LimitRange )
+
+YAML
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yes-test
+  namespace: ns-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: yes-test
+  template:
+    metadata:
+      labels:
+        app: yes-test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        resources:
+          # Żądanie 150m mieści się w limicie 200m
+          requests:
+            cpu: "150m" 
+            memory: "128Mi"
+          limits:
+            cpu: "150m"
+            memory: "256Mi"
+manifests/23-deploy-zero-test.yaml
+(Wdrożenie bez zdefiniowanych zasobów )
+
+YAML
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: zero-test
+  namespace: ns-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: zero-test
+  template:
+    metadata:
+      labels:
+        app: zero-test
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        # Brak sekcji 'resources'
+        # LimitRange automatycznie przypisze domyślne
