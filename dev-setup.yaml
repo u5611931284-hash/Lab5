@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: dev-pod-quota
+  namespace: ns-dev
+spec:
+  hard:
+    pods: "10" 
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: dev-default-limits
+  namespace: ns-dev
+spec:
+  limits:
+  - default: # Domyślny limit, jeśli nie podano
+      cpu: "200m"     # 0.2 rdzenia
+      memory: "256Mi"
+    defaultRequest: # Domyślne żądanie, jeśli nie podano
+      cpu: "100m"
+      memory: "128Mi"
+    type: Container
