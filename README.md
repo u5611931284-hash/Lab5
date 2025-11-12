@@ -93,24 +93,21 @@ Oczekiwany wynik: Polecenie powinno zwrócić zasoby przypisane przez LimitRange
 Poniżej znajduje się zawartość plików YAML użytych do wykonania zadania, umieszczonych w katalogu manifests/.
 
 manifests/01-namespace-ns-dev.yaml
-YAML
-
+cat <<EOF > manifests/01-namespace-ns-dev.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
   name: ns-dev
-manifests/02-namespace-ns-prod.yaml
-YAML
+EOF
 
+cat <<EOF > manifests/02-namespace-ns-prod.yaml
 apiVersion: v1
 kind: Namespace
 metadata:
   name: ns-prod
-manifests/11-rq-ns-dev.yaml
-(Ogranicza ns-dev do 10 podów )
+EOF
 
-YAML
-
+cat <<EOF > manifests/11-rq-ns-dev.yaml
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -119,11 +116,9 @@ metadata:
 spec:
   hard:
     pods: "10"
-manifests/12-lr-ns-dev.yaml
-(Ustawia domyślne i maksymalne limity dla ns-dev )
+EOF
 
-YAML
-
+cat <<EOF > manifests/12-lr-ns-dev.yaml
 apiVersion: v1
 kind: LimitRange
 metadata:
@@ -131,18 +126,16 @@ metadata:
   namespace: ns-dev
 spec:
   limits:
-  - default: # Maksymalny limit, jaki Pod może otrzymać
-      cpu: "200m"     
+  - default:
+      cpu: "200m"
       memory: "256Mi"
-    defaultRequest: # Domyślne żądanie (jeśli nie podano)
+    defaultRequest:
       cpu: "100m"
       memory: "128Mi"
     type: Container
-manifests/13-rq-ns-prod.yaml
-(Ustawia 2x większe zasoby dla ns-prod niż dla ns-dev )
+EOF
 
-YAML
-
+cat <<EOF > manifests/13-rq-ns-prod.yaml
 apiVersion: v1
 kind: ResourceQuota
 metadata:
@@ -150,17 +143,14 @@ metadata:
   namespace: ns-prod
 spec:
   hard:
-    pods: "20" # 2x 10 podów
-    # Ustawiamy zasoby 2x większe niż limity z ns-dev
+    pods: "20"
     requests.cpu: "2"
     requests.memory: "2Gi"
     limits.cpu: "4"
     limits.memory: "4Gi"
-manifests/21-deploy-no-test.yaml
-(Próba przekroczenia limitów LimitRange )
+EOF
 
-YAML
-
+cat <<EOF > manifests/21-deploy-no-test.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -180,18 +170,15 @@ spec:
       - name: nginx
         image: nginx
         resources:
-          # Żądanie 300m przekracza limit 200m z LimitRange
           requests:
-            cpu: "300m" 
+            cpu: "300m"
             memory: "128Mi"
           limits:
             cpu: "300m"
             memory: "256Mi"
-manifests/22-deploy-yes-test.yaml
-(Żądania mieszczące się w limitach LimitRange )
+EOF
 
-YAML
-
+cat <<EOF > manifests/22-deploy-yes-test.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -211,18 +198,15 @@ spec:
       - name: nginx
         image: nginx
         resources:
-          # Żądanie 150m mieści się w limicie 200m
           requests:
-            cpu: "150m" 
+            cpu: "150m"
             memory: "128Mi"
           limits:
             cpu: "150m"
             memory: "256Mi"
-manifests/23-deploy-zero-test.yaml
-(Wdrożenie bez zdefiniowanych zasobów )
+EOF
 
-YAML
-
+cat <<EOF > manifests/23-deploy-zero-test.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -241,5 +225,4 @@ spec:
       containers:
       - name: nginx
         image: nginx
-        # Brak sekcji 'resources'
-        # LimitRange automatycznie przypisze domyślne
+EOF
