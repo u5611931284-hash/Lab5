@@ -1,4 +1,4 @@
-Sprawozdanie: Laboratorium 5 (PFSwChO)
+# Sprawozdanie: Laboratorium 5 (PFSwChO)
 Repozytorium zawiera kompletne rozwiązanie zadania głównego z Laboratorium 5 . Celem było skonfigurowanie dwóch przestrzeni nazw (ns-dev, ns-prod) z różnymi politykami zasobów, a następnie przetestowanie działania ResourceQuota i LimitRange za pomocą trzech wdrożeń (Deployment): no-test, yes-test oraz zero-test.
 
 1. Konfiguracja Środowiska
